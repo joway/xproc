@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="xg" x1="21" y1="21" x2="43" y2="43" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8ceb97"/>
+      <stop offset="1" stop-color="#55c268"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.2"/>
+    </filter>
+  </defs>
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="#0c0e11" stroke="#23272d" stroke-width="2"/>
+  <!-- under stroke: broken at the crossing to pass beneath -->
+  <path class="x-under" d="M43 21 36.5 27.5 M27.5 36.5 21 43" stroke="#35543c" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+  <!-- over stroke glow -->
+  <path class="x-glow" d="M21 21 43 43" stroke="#7ee08a" stroke-width="6.5" stroke-linecap="round" fill="none" opacity=".45" filter="url(#glow)"/>
+  <!-- over stroke -->
+  <path class="x-over" d="M21 21 43 43" stroke="url(#xg)" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+  <!-- supervisor beacon -->
+  <circle class="x-dot" cx="32" cy="32" r="3.2" fill="#dcffe2"/>
+</svg>

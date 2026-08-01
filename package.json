@@ -1,0 +1,26 @@
+{
+  "name": "@elsetech/xproc",
+  "version": "0.2.0",
+  "description": "Procfile-based multi-process runner with a live web UI for logs",
+  "keywords": ["procfile", "foreman", "process-manager", "dev-server", "logs"],
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "xproc": "bin/xproc.js"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "public"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "packageManager": "pnpm@10.21.0",
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

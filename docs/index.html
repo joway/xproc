@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>xproc — Procfile runner with a live web UI</title>
+<meta name="description" content="Run all your dev processes with one command and watch their logs in a browser. Procfile-based, zero config, npm installable.">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='1' y='1' width='62' height='62' rx='14' fill='%230c0e11' stroke='%2323272d' stroke-width='2'/%3E%3Cpath d='M43 21 36.5 27.5 M27.5 36.5 21 43' stroke='%2335543c' stroke-width='6.5' stroke-linecap='round' fill='none'/%3E%3Cpath d='M21 21 43 43' stroke='%237ee08a' stroke-width='6.5' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='32' cy='32' r='3.2' fill='%23dcffe2'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0b0d;
+    --panel: #0c0e11;
+    --panel2: #101317;
+    --border: #191c20;
+    --border2: #1e2228;
+    --text: #e6e8ea;
+    --text-soft: #c3c8ce;
+    --log-text: #c9ced4;
+    --muted: #5b626b;
+    --dim: #4e545c;
+    --dimmer: #454b53;
+    --green: #7ee08a;
+    --red: #e08b8b;
+    --err-text: #f0a7a7;
+    --sys: #8b8ff5;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: 'Inter Tight', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.6; }
+  a { color: var(--green); text-decoration: none; }
+  a:hover { color: #a8f0b0; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #23262b; border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  @keyframes xpulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+
+  .wrap { max-width: 1020px; margin: 0 auto; padding: 0 24px; }
+  section { margin: 72px 0; }
+  h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .sub { color: var(--muted); margin-bottom: 26px; }
+
+  /* ---- hero ---- */
+  #hero { padding: 84px 0 10px; text-align: center; }
+  #hero .logo { width: 76px; height: 76px; margin-bottom: 22px; filter: drop-shadow(0 0 24px #7ee08a30); }
+  #hero h1 { font-family: var(--mono); font-size: 42px; font-weight: 700; letter-spacing: .04em; }
+  #hero .tagline { font-size: 18px; color: var(--text-soft); margin: 12px auto 6px; max-width: 620px; }
+  #hero .tagline b { color: var(--green); font-weight: 600; }
+  #hero .sub2 { color: var(--muted); font-size: 14px; }
+  .install { display: inline-flex; align-items: center; gap: 14px; margin-top: 30px; background: var(--panel2); border: 1px solid var(--border2); border-radius: 10px; padding: 13px 18px; font-family: var(--mono); font-size: 14px; }
+  .install .dollar { color: var(--dim); user-select: none; }
+  .install button { font-family: var(--mono); font-size: 11px; padding: 5px 10px; border: 1px solid #23272d; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+  .install button:hover { border-color: #3a4048; color: var(--text-soft); }
+  .hero-links { margin-top: 18px; font-family: var(--mono); font-size: 12.5px; display: flex; gap: 22px; justify-content: center; }
+
+  /* ---- code blocks ---- */
+  .code { position: relative; background: var(--panel2); border: 1px solid var(--border2); border-radius: 10px; padding: 16px 18px; font-family: var(--mono); font-size: 13px; line-height: 1.7; overflow-x: auto; white-space: pre; color: var(--log-text); }
+  .code .c { color: var(--dim); }
+  .code .g { color: var(--green); }
+  .code .y { color: #e8cd9a; }
+  .copy { position: absolute; top: 10px; right: 10px; font-family: var(--mono); font-size: 10.5px; padding: 4px 9px; border: 1px solid #23272d; border-radius: 6px; background: var(--panel); color: var(--muted); cursor: pointer; }
+  .copy:hover { border-color: #3a4048; color: var(--text-soft); }
+  .filename { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 11px; color: var(--green); background: var(--panel2); border: 1px solid var(--border2); border-bottom: 0; border-radius: 8px 8px 0 0; padding: 6px 14px; margin-bottom: -1px; position: relative; }
+  .filename::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--green); }
+  .filename + .code { border-top-left-radius: 0; }
+
+  /* ---- quick start ---- */
+  .steps { display: grid; gap: 18px; }
+  .step { display: grid; grid-template-columns: 34px 1fr; gap: 16px; }
+  .step .n { width: 30px; height: 30px; border-radius: 50%; border: 1px solid #23402a; background: #12201a; color: var(--green); font-family: var(--mono); font-size: 13px; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+  .step h3 { font-size: 15.5px; font-weight: 600; margin-bottom: 8px; }
+  .step p { color: var(--muted); font-size: 13.5px; margin-top: 8px; }
+  .step code { font-family: var(--mono); font-size: 12.5px; color: var(--text-soft); background: var(--panel2); border: 1px solid var(--border2); border-radius: 5px; padding: 1px 6px; }
+
+  /* ---- features ---- */
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .feat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+  .feat .ic { font-family: var(--mono); font-size: 13px; color: var(--green); margin-bottom: 10px; }
+  .feat h3 { font-size: 14.5px; font-weight: 600; margin-bottom: 6px; }
+  .feat p { color: var(--muted); font-size: 13px; }
+
+  /* ---- cli table ---- */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  th { color: var(--dim); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; }
+  td:first-child { font-family: var(--mono); font-size: 12.5px; color: var(--green); white-space: nowrap; }
+  td:last-child { color: var(--text-soft); }
+
+  footer.page { border-top: 1px solid var(--border); margin-top: 80px; padding: 26px 0 40px; text-align: center; font-family: var(--mono); font-size: 12px; color: var(--dim); }
+
+  /* ================= demo (simulated app UI) ================= */
+  #demo-frame { border: 1px solid var(--border2); border-radius: 12px; overflow: hidden; box-shadow: 0 24px 80px #00000080; }
+  #demo-chrome { display: flex; align-items: center; gap: 8px; background: #14171b; padding: 9px 14px; border-bottom: 1px solid var(--border); }
+  #demo-chrome .cdot { width: 10px; height: 10px; border-radius: 50%; }
+  #demo-chrome .url { margin-left: 12px; flex: 1; max-width: 320px; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 4px 12px; font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: center; }
+  #demo { display: grid; grid-template-columns: 218px 1fr; height: 480px; background: var(--bg); font-size: 14px; }
+
+  #d-side { display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--panel); min-height: 0; }
+  #d-brand { display: flex; align-items: center; gap: 8px; padding: 13px 14px 10px; }
+  #d-brand svg { width: 18px; height: 18px; }
+  #d-brand .name { font-family: var(--mono); font-size: 12.5px; font-weight: 700; letter-spacing: .06em; }
+  #d-brand .ver { margin-left: auto; font-family: var(--mono); font-size: 9px; color: #565c64; }
+  #d-path { padding: 0 14px 10px; font-family: var(--mono); font-size: 9.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #d-listhead { display: flex; justify-content: space-between; padding: 0 14px 6px; }
+  #d-listhead .l { font-size: 9.5px; letter-spacing: .14em; color: #575d66; text-transform: uppercase; font-weight: 600; }
+  #d-listhead .r { font-family: var(--mono); font-size: 9.5px; color: #575d66; }
+  #d-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 8px; display: flex; flex-direction: column; gap: 2px; }
+  .d-proc { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; width: 100%; }
+  .d-proc:hover { background: #15181c; }
+  .d-proc.active { background: #161a1f; box-shadow: inset 2px 0 0 var(--green); }
+  .d-proc.down { opacity: .5; }
+  .d-proc .dot { width: 6px; height: 6px; border-radius: 50%; flex: none; background: #5a616a; }
+  .d-proc.up .dot { background: var(--green); box-shadow: 0 0 8px #7ee08a70; }
+  .d-proc .info { flex: 1; min-width: 0; }
+  .d-proc .pname { font-family: var(--mono); font-size: 11px; font-weight: 500; }
+  .d-proc .pcmd { font-size: 9px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .d-proc .badge { font-family: var(--mono); font-size: 8.5px; color: var(--dim); }
+  #d-sidefoot { border-top: 1px solid var(--border); padding: 9px 14px; display: flex; align-items: center; gap: 7px; }
+  #d-sidefoot .pulse { width: 5px; height: 5px; border-radius: 50%; background: var(--green); animation: xpulse 1.8s ease-in-out infinite; }
+  #d-sidefoot .txt { font-family: var(--mono); font-size: 9px; color: #6b727b; }
+
+  #d-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  #d-head { display: flex; align-items: center; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  #d-title { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+  #d-pill { font-family: var(--mono); font-size: 8.5px; letter-spacing: .06em; padding: 2px 7px; border-radius: 20px; background: #12201a; color: var(--green); }
+  #d-pill.down { background: #1c1416; color: var(--red); }
+  #d-cmd { font-family: var(--mono); font-size: 9.5px; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #d-headright { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+  .d-stat { text-align: right; }
+  .d-stat .k { font-size: 8px; letter-spacing: .12em; color: var(--dim); text-transform: uppercase; }
+  .d-stat .v { font-family: var(--mono); font-size: 10.5px; color: var(--text-soft); margin-top: 1px; }
+  .d-btn { font-family: var(--mono); font-size: 9.5px; padding: 5px 10px; border: 1px solid #23272d; border-radius: 5px; background: transparent; color: var(--text-soft); cursor: pointer; }
+  .d-btn:hover { border-color: #3a4048; background: #15181c; }
+  #d-stop { border-color: #2b2023; color: var(--red); }
+  #d-stop.as-start { color: var(--green); border-color: #1e2a22; }
+
+  #d-toolbar { display: flex; align-items: center; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--bg); }
+  #d-searchbox { display: flex; align-items: center; gap: 7px; flex: 1; max-width: 300px; background: var(--panel2); border: 1px solid var(--border2); border-radius: 6px; padding: 5px 9px; }
+  #d-searchbox:focus-within { border-color: #2c323a; }
+  #d-searchbox .slash { font-family: var(--mono); font-size: 10px; color: var(--dim); }
+  #d-search { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-family: var(--mono); font-size: 10.5px; min-width: 0; }
+  #d-match { font-family: var(--mono); font-size: 9px; color: var(--muted); white-space: nowrap; }
+  .d-chip { font-family: var(--mono); font-size: 9.5px; padding: 4px 9px; border-radius: 5px; cursor: pointer; border: 1px solid #1c2026; background: transparent; color: var(--muted); }
+  .d-chip:hover { border-color: #3a4048; }
+  .d-chip.active { border-color: #2f353d; background: #171b20; color: var(--text); }
+  #d-follow { margin-left: auto; font-family: var(--mono); font-size: 9.5px; cursor: pointer; border: 0; background: transparent; color: var(--muted); }
+  #d-follow.on { color: var(--green); }
+
+  #d-pane { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 0 14px; }
+  .d-line { display: flex; gap: 10px; padding: 1px 16px; }
+  .d-line .t { font-family: var(--mono); font-size: 9px; color: var(--dimmer); width: 52px; flex: none; text-align: right; padding-top: 2px; }
+  .d-line .tag { font-family: var(--mono); font-size: 7.5px; letter-spacing: .08em; width: 30px; flex: none; padding-top: 3px; color: var(--dim); }
+  .d-line.err .tag { color: #e26d6d; }
+  .d-line.sys .tag { color: var(--sys); }
+  .d-line .tx { font-family: var(--mono); font-size: 10.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; flex: 1; color: var(--log-text); }
+  .d-line.err .tx { color: var(--err-text); }
+  .d-line.sys .tx { color: #a9acf7; }
+  #d-empty { padding: 40px 16px; text-align: center; font-family: var(--mono); font-size: 10.5px; color: var(--dimmer); }
+  #d-foot { display: flex; align-items: center; gap: 14px; padding: 6px 16px; border-top: 1px solid var(--border); background: var(--panel); font-family: var(--mono); font-size: 9px; color: #565c64; }
+  #d-foot .hint { margin-left: auto; }
+
+  @media (max-width: 760px) {
+    .features { grid-template-columns: 1fr; }
+    #demo { grid-template-columns: 170px 1fr; }
+    #d-headright { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header id="hero">
+    <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+      <defs>
+        <linearGradient id="xg" x1="21" y1="21" x2="43" y2="43" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color="#8ceb97"/><stop offset="1" stop-color="#55c268"/>
+        </linearGradient>
+      </defs>
+      <rect x="1" y="1" width="62" height="62" rx="14" fill="#0c0e11" stroke="#23272d" stroke-width="2"/>
+      <path d="M43 21 36.5 27.5 M27.5 36.5 21 43" stroke="#35543c" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+      <path d="M21 21 43 43" stroke="url(#xg)" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+      <circle cx="32" cy="32" r="3.2" fill="#dcffe2"/>
+    </svg>
+    <h1>xproc</h1>
+    <p class="tagline">Run all your dev processes with <b>one command</b> — and watch their logs in a browser.</p>
+    <p class="sub2">Procfile-based · real-time searchable logs · everything dies when you Ctrl-C</p>
+    <div class="install">
+      <span class="dollar">$</span>
+      <span id="install-cmd">npm install -g @elsetech/xproc</span>
+      <button onclick="copyText('npm install -g @elsetech/xproc', this)">copy</button>
+    </div>
+    <div class="hero-links">
+      <a href="https://www.npmjs.com/package/@elsetech/xproc">npm</a>
+      <a href="#quickstart">quick start</a>
+      <a href="#demo-section">live demo ↓</a>
+    </div>
+  </header>
+
+  <section id="demo-section">
+    <h2>See it in action</h2>
+    <p class="sub">A simulated preview of the web UI you get at <code style="font-family:var(--mono);font-size:13px;color:var(--text-soft)">localhost:12345</code> — click processes, search, filter, stop and restart. The real thing looks exactly like this, wired to your actual processes.</p>
+    <div id="demo-frame">
+      <div id="demo-chrome">
+        <div class="cdot" style="background:#3a3f46"></div>
+        <div class="cdot" style="background:#3a3f46"></div>
+        <div class="cdot" style="background:#3a3f46"></div>
+        <div class="url">localhost:12345</div>
+      </div>
+      <div id="demo">
+        <aside id="d-side">
+          <div id="d-brand">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+              <rect x="1" y="1" width="62" height="62" rx="14" fill="#0c0e11" stroke="#23272d" stroke-width="2"/>
+              <path d="M43 21 36.5 27.5 M27.5 36.5 21 43" stroke="#35543c" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+              <path d="M21 21 43 43" stroke="#7ee08a" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+              <circle cx="32" cy="32" r="3.2" fill="#dcffe2"/>
+            </svg>
+            <div class="name">xproc</div>
+            <div class="ver">v0.1.0</div>
+          </div>
+          <div id="d-path">~/dev/app/Procfile</div>
+          <div id="d-listhead"><div class="l">Processes</div><div class="r" id="d-running"></div></div>
+          <div id="d-list"></div>
+          <div id="d-sidefoot"><div class="pulse"></div><div class="txt" id="d-uptime">xproc run</div></div>
+        </aside>
+        <main id="d-main">
+          <div id="d-head">
+            <div style="min-width:0">
+              <div style="display:flex;align-items:center;gap:8px">
+                <div id="d-title">web</div><div id="d-pill">running</div>
+              </div>
+              <div id="d-cmd"></div>
+            </div>
+            <div id="d-headright">
+              <div class="d-stat"><div class="k">PID</div><div class="v" id="d-pid">—</div></div>
+              <div class="d-stat"><div class="k">CPU</div><div class="v" id="d-cpu">—</div></div>
+              <div class="d-stat"><div class="k">MEM</div><div class="v" id="d-mem">—</div></div>
+              <div style="display:flex;gap:6px">
+                <button class="d-btn" id="d-restart">restart</button>
+                <button class="d-btn" id="d-stop">stop</button>
+              </div>
+            </div>
+          </div>
+          <div id="d-toolbar">
+            <div id="d-searchbox">
+              <div class="slash">/</div>
+              <input id="d-search" type="search" placeholder="Search logs…" autocomplete="off">
+              <div id="d-match"></div>
+            </div>
+            <div style="display:flex;gap:5px" id="d-chips"></div>
+            <button id="d-follow" class="on">● follow</button>
+          </div>
+          <div id="d-pane"></div>
+          <footer id="d-foot">
+            <div>localhost:12345</div>
+            <div id="d-total"></div>
+            <div class="hint">Ctrl-C on xproc run terminates all processes</div>
+          </footer>
+        </main>
+      </div>
+    </div>
+  </section>
+
+  <section id="quickstart">
+    <h2>Quick start</h2>
+    <p class="sub">From zero to a live process dashboard in under a minute.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="n">1</div>
+        <div style="min-width:0">
+          <h3>Install</h3>
+          <div class="code"><button class="copy" onclick="copyText('npm install -g @elsetech/xproc', this)">copy</button><span class="c"># globally, or per-project with -D</span>
+npm install -g @elsetech/xproc</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">2</div>
+        <div style="min-width:0">
+          <h3>Create a Procfile</h3>
+          <div class="filename">./Procfile</div>
+          <div class="code"><button class="copy" onclick="copyText('web: pnpm dev\napi: node server.js\nworker: node worker.js', this)">copy</button><span class="g">web:</span> pnpm dev
+<span class="g">api:</span> node server.js
+<span class="g">worker:</span> node worker.js</div>
+          <p>One process per line: <code>name: command</code>. Lines starting with <code>#</code> are comments.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="n">3</div>
+        <div style="min-width:0">
+          <h3>Run</h3>
+          <div class="code"><button class="copy" onclick="copyText('xproc run', this)">copy</button>xproc run
+<span class="c">xproc: web UI at http://localhost:12345</span>
+<span class="c">xproc: started web (pid 48231): pnpm dev</span>
+<span class="c">xproc: started api (pid 48232): node server.js</span>
+<span class="c">xproc: started worker (pid 48233): node worker.js</span></div>
+          <p>Every process starts, and your browser opens the dashboard. Hit <code>Ctrl-C</code> and everything — including grandchild processes — is terminated cleanly (SIGTERM, then SIGKILL after 3s).</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Features</h2>
+    <p class="sub">Small tool, sharp focus: run things, see logs, kill everything on exit.</p>
+    <div class="features">
+      <div class="feat"><div class="ic">&gt;_</div><h3>One command</h3><p>xproc run starts every Procfile entry and opens the dashboard. No daemon, no config beyond the Procfile.</p></div>
+      <div class="feat"><div class="ic">≋</div><h3>Real-time logs</h3><p>Logs stream over WebSocket with auto-follow. Scroll up to pause, scroll back down to resume.</p></div>
+      <div class="feat"><div class="ic">/</div><h3>Search &amp; filter</h3><p>Press / to search the active process's logs, and filter by stream: stdout, stderr, or xproc events.</p></div>
+      <div class="feat"><div class="ic">%</div><h3>Live CPU / MEM</h3><p>Per-process CPU and memory sampled every 2 seconds, right in the header.</p></div>
+      <div class="feat"><div class="ic">⟳</div><h3>Process control</h3><p>Stop, start, and restart individual processes from the UI without touching your terminal.</p></div>
+      <div class="feat"><div class="ic">×</div><h3>Clean exit</h3><p>When xproc run exits, the whole process tree goes with it. No orphans, no port squatters.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>CLI reference</h2>
+    <p class="sub">Everything hangs off a single subcommand.</p>
+    <table>
+      <tr><th>Option</th><th>Default</th><th>Description</th></tr>
+      <tr><td>xproc run</td><td>—</td><td>Start all Procfile processes and the web UI</td></tr>
+      <tr><td>-f, --procfile &lt;path&gt;</td><td>./Procfile</td><td>Procfile location</td></tr>
+      <tr><td>-p, --port &lt;port&gt;</td><td>12345</td><td>Web UI port; if the default is taken, a random free port is used</td></tr>
+      <tr><td>--no-open</td><td>—</td><td>Don't open the browser automatically</td></tr>
+    </table>
+  </section>
+
+</div>
+
+<footer class="page">
+  <div>@elsetech/xproc · MIT License · <a href="https://www.npmjs.com/package/@elsetech/xproc">npm</a></div>
+</footer>
+
+<script>
+'use strict'
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const old = btn.textContent
+    btn.textContent = 'copied!'
+    setTimeout(() => { btn.textContent = old }, 1200)
+  })
+}
+
+/* ================= simulated demo ================= */
+
+const SPECS = [
+  { name: 'web', cmd: 'pnpm dev --port 3000', pid: 48231, kind: 'web' },
+  { name: 'api', cmd: 'node server.js', pid: 48232, kind: 'api' },
+  { name: 'worker', cmd: 'node worker.js --queue default', pid: 48233, kind: 'worker' },
+  { name: 'postgres', cmd: 'docker compose up postgres', pid: 48234, kind: 'db' },
+]
+
+const SEED = {
+  web: [
+    ['out', 'vite v5.4.2 ready in 412 ms'],
+    ['out', '➜  Local:   http://localhost:3000/'],
+    ['out', 'hmr update /src/routes/dashboard.tsx'],
+    ['err', "warning: chunk 'vendor' is larger than 500 kB after minification"],
+    ['out', 'GET /api/session 200 in 14ms'],
+    ['out', 'page reload src/lib/store.ts'],
+  ],
+  api: [
+    ['out', 'listening on :8080 (env=development)'],
+    ['out', 'GET  /v1/projects        200  6.4ms'],
+    ['out', 'POST /v1/projects/48/run 201  22.1ms'],
+    ['err', 'slow query 214ms: SELECT * FROM runs WHERE project_id = $1'],
+    ['err', 'handler panic recovered: nil pointer in billing.Resolve'],
+    ['out', 'GET  /healthz            200  0.4ms'],
+  ],
+  worker: [
+    ['out', 'worker booted, concurrency=8 queue=default'],
+    ['out', 'job export.csv id=91f3 finished in 1.82s'],
+    ['err', 'retrying job email.digest id=7a02 attempt 2/5'],
+    ['out', 'heartbeat ok, inflight=3'],
+    ['err', 'job thumbnail.render id=c41d failed: timeout after 30s'],
+  ],
+  db: [
+    ['out', 'database system is ready to accept connections'],
+    ['out', 'checkpoint starting: time'],
+    ['out', 'autovacuum: processing database "app_dev"'],
+    ['err', 'connection pool at 82% capacity (41/50)'],
+  ],
+}
+
+const TAGS = { out: 'OUT', err: 'ERR', sys: 'SYS' }
+const MAX = 300
+
+const demo = {
+  active: 'web',
+  query: '',
+  level: 'all',
+  follow: true,
+  started: Date.now(),
+  logs: {},    // name -> [{t, stream, line}]
+  stopped: {}, // name -> true
+  shown: 0,
+}
+for (const s of SPECS) {
+  demo.logs[s.name] = SEED[s.kind].slice(0, 4).map((l, i) => ({ t: Date.now() - (4 - i) * 1500, stream: l[0], line: l[1] }))
+}
+
+const d$ = id => document.getElementById(id)
+const dPane = d$('d-pane'), dList = d$('d-list'), dSearch = d$('d-search')
+
+const dFmt = t => new Date(t).toTimeString().slice(0, 8)
+const dEsc = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const dUp = name => !demo.stopped[name]
+const dVisible = e => (demo.level === 'all' || e.stream === demo.level) &&
+  (!demo.query || e.line.toLowerCase().includes(demo.query.toLowerCase()))
+
+function dRenderSidebar() {
+  dList.innerHTML = ''
+  for (const s of SPECS) {
+    const up = dUp(s.name)
+    const b = document.createElement('button')
+    b.className = 'd-proc' + (up ? ' up' : ' down') + (s.name === demo.active ? ' active' : '')
+    b.innerHTML = '<div class="dot"></div><div class="info"><div class="pname">' + s.name +
+      '</div><div class="pcmd">' + dEsc(s.cmd) + '</div></div><div class="badge">' + (up ? s.pid : 'exited') + '</div>'
+    b.onclick = () => { demo.active = s.name; dRenderSidebar(); dRenderHeader(); dRenderLogs() }
+    dList.appendChild(b)
+  }
+  d$('d-running').textContent = SPECS.filter(s => dUp(s.name)).length + '/' + SPECS.length
+}
+
+function dRenderHeader() {
+  const s = SPECS.find(x => x.name === demo.active)
+  const up = dUp(s.name)
+  d$('d-title').textContent = s.name
+  const pill = d$('d-pill')
+  pill.textContent = up ? 'running' : 'stopped'
+  pill.className = up ? '' : 'down'
+  d$('d-cmd').textContent = '$ ' + s.cmd
+  d$('d-pid').textContent = up ? s.pid : '—'
+  d$('d-cpu').textContent = up ? (1 + (s.pid % 5) + Math.sin(Date.now() / 3000 + s.pid) * .8).toFixed(1) + '%' : '—'
+  d$('d-mem').textContent = up ? (40 + (s.pid % 90)) + ' MB' : '—'
+  const stop = d$('d-stop')
+  stop.textContent = up ? 'stop' : 'start'
+  stop.className = 'd-btn' + (up ? '' : ' as-start')
+}
+
+function dLineHtml(e) {
+  return '<div class="d-line ' + e.stream + '"><div class="t">' + dFmt(e.t) + '</div><div class="tag">' +
+    TAGS[e.stream] + '</div><div class="tx">' + (dEsc(e.line) || '&nbsp;') + '</div></div>'
+}
+
+function dRenderLogs() {
+  const lines = demo.logs[demo.active].filter(dVisible)
+  demo.shown = lines.length
+  dPane.innerHTML = lines.map(dLineHtml).join('') ||
+    '<div id="d-empty">' + (demo.query || demo.level !== 'all' ? 'No matching log lines' : 'No output yet') + '</div>'
+  if (demo.follow) dPane.scrollTop = dPane.scrollHeight
+  dRenderMeta()
+}
+
+function dRenderMeta() {
+  d$('d-match').textContent = demo.query ? demo.shown + (demo.shown === 1 ? ' match' : ' matches') : ''
+  d$('d-total').textContent = demo.logs[demo.active].length + ' lines · ' + (demo.follow ? 'following' : 'paused')
+}
+
+function dAppend(name, e) {
+  const logs = demo.logs[name]
+  logs.push(e)
+  if (logs.length > MAX) logs.splice(0, logs.length - MAX)
+  if (name !== demo.active) return
+  if (dVisible(e)) {
+    const empty = dPane.querySelector('#d-empty')
+    if (empty) empty.remove()
+    dPane.insertAdjacentHTML('beforeend', dLineHtml(e))
+    while (dPane.childElementCount > MAX) dPane.firstElementChild.remove()
+    demo.shown++
+    if (demo.follow) dPane.scrollTop = dPane.scrollHeight
+  }
+  dRenderMeta()
+}
+
+function dRenderChips() {
+  const box = d$('d-chips')
+  box.innerHTML = ''
+  for (const lv of ['all', 'out', 'err', 'sys']) {
+    const c = document.createElement('button')
+    c.className = 'd-chip' + (demo.level === lv ? ' active' : '')
+    c.textContent = lv
+    c.onclick = () => { demo.level = lv; dRenderChips(); dRenderLogs() }
+    box.appendChild(c)
+  }
+}
+
+dSearch.addEventListener('input', () => { demo.query = dSearch.value; dRenderLogs() })
+
+d$('d-follow').onclick = () => dSetFollow(!demo.follow)
+function dSetFollow(on) {
+  demo.follow = on
+  const b = d$('d-follow')
+  b.className = on ? 'on' : ''
+  b.textContent = (on ? '●' : '○') + ' follow'
+  dRenderMeta()
+  if (on) dPane.scrollTop = dPane.scrollHeight
+}
+dPane.addEventListener('scroll', () => {
+  const atBottom = dPane.scrollHeight - dPane.scrollTop - dPane.clientHeight < 30
+  if (demo.follow && !atBottom) dSetFollow(false)
+  else if (!demo.follow && atBottom) dSetFollow(true)
+})
+
+d$('d-restart').onclick = () => {
+  const name = demo.active
+  delete demo.stopped[name]
+  dAppend(name, { t: Date.now(), stream: 'sys', line: '[xproc] restarting...' })
+  dRenderSidebar(); dRenderHeader()
+}
+d$('d-stop').onclick = () => {
+  const name = demo.active
+  if (dUp(name)) {
+    demo.stopped[name] = true
+    dAppend(name, { t: Date.now(), stream: 'sys', line: '[xproc] process exited (signal SIGTERM)' })
+  } else {
+    delete demo.stopped[name]
+    dAppend(name, { t: Date.now(), stream: 'sys', line: '[xproc] process started' })
+  }
+  dRenderSidebar(); dRenderHeader()
+}
+
+setInterval(() => {
+  const alive = SPECS.filter(s => dUp(s.name))
+  if (!alive.length) return
+  const s = alive[Math.floor(Math.random() * alive.length)]
+  const pool = SEED[s.kind]
+  const pick = pool[Math.floor(Math.random() * pool.length)]
+  dAppend(s.name, { t: Date.now(), stream: pick[0], line: pick[1] })
+}, 700)
+
+setInterval(() => {
+  const sec = Math.floor((Date.now() - demo.started) / 1000)
+  d$('d-uptime').textContent = 'xproc run · uptime ' + Math.floor(sec / 60) + 'm ' + (sec % 60) + 's'
+  dRenderHeader()
+}, 1000)
+
+dRenderSidebar()
+dRenderHeader()
+dRenderChips()
+dRenderLogs()
+</script>
+</body>
+</html>

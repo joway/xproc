@@ -1,0 +1,4 @@
+# Example Procfile — copy to `Procfile` and edit.
+web: python3 -m http.server
+logger: node -e "let i=0; setInterval(()=>console.log('request', ++i), 800)"
+worker: node -e "let i=0; setInterval(()=>{ console.log('job done', ++i); if (i % 4 === 0) console.error('job failed', i) }, 1200)"

@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>xproc</title>
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter+Tight:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0b0d;
+    --panel: #0c0e11;
+    --border: #191c20;
+    --text: #e6e8ea;
+    --text-soft: #c3c8ce;
+    --log-text: #c9ced4;
+    --muted: #5b626b;
+    --dim: #4e545c;
+    --dimmer: #454b53;
+    --green: #7ee08a;
+    --red: #e08b8b;
+    --err-text: #f0a7a7;
+    --sys: #8b8ff5;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    display: grid;
+    grid-template-columns: 264px 1fr;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter Tight', system-ui, sans-serif;
+    font-size: 14px;
+  }
+  a { color: var(--green); text-decoration: none; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #23262b; border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  @keyframes xpulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+
+  /* ---- sidebar ---- */
+  #sidebar { display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--panel); min-height: 0; }
+  #brand { display: flex; align-items: center; gap: 10px; padding: 18px 18px 14px; }
+  #brand svg { width: 22px; height: 22px; flex: none; }
+  #brand.offline .x-over { stroke: var(--red); }
+  #brand.offline .x-glow { stroke: var(--red); }
+  #brand.offline .x-dot { fill: #ffe2e2; }
+  #brand.offline .x-under { stroke: #543537; }
+  #brand .name { font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: .06em; }
+  #version { margin-left: auto; font-family: var(--mono); font-size: 10px; color: #565c64; }
+  #procfile-path { padding: 0 18px 14px; font-family: var(--mono); font-size: 10.5px; color: var(--dim); letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #list-head { display: flex; align-items: center; justify-content: space-between; padding: 0 18px 8px; }
+  #list-head .label { font-size: 10.5px; letter-spacing: .14em; color: #575d66; text-transform: uppercase; font-weight: 600; }
+  #running-label { font-family: var(--mono); font-size: 10.5px; color: #575d66; }
+  #proc-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 10px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .proc-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; width: 100%; }
+  .proc-item:hover { background: #15181c; }
+  .proc-item.active { background: #161a1f; box-shadow: inset 2px 0 0 var(--green); }
+  .proc-item.down { opacity: .5; }
+  .proc-item .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: #5a616a; }
+  .proc-item.up .dot { background: var(--green); box-shadow: 0 0 8px #7ee08a70; }
+  .proc-item .info { flex: 1; min-width: 0; }
+  .proc-item .pname { font-family: var(--mono); font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .proc-item .pcmd { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .proc-item .badge { font-family: var(--mono); font-size: 10px; color: var(--dim); }
+  #side-foot { border-top: 1px solid var(--border); padding: 12px 18px; display: flex; align-items: center; gap: 8px; }
+  #side-foot .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: xpulse 1.8s ease-in-out infinite; }
+  #side-foot .txt { font-family: var(--mono); font-size: 10.5px; color: #6b727b; }
+
+  /* ---- main ---- */
+  #main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  #header { display: flex; align-items: center; gap: 16px; padding: 16px 22px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  #head-id { min-width: 0; }
+  #head-id .row { display: flex; align-items: center; gap: 10px; }
+  #proc-title { font-family: var(--mono); font-size: 15px; font-weight: 700; }
+  #status-pill { font-family: var(--mono); font-size: 10px; letter-spacing: .06em; padding: 3px 8px; border-radius: 20px; background: #12201a; color: var(--green); }
+  #status-pill.down { background: #1c1416; color: var(--red); }
+  #proc-cmd { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #head-right { margin-left: auto; display: flex; align-items: center; gap: 22px; }
+  .stat { text-align: right; }
+  .stat .k { font-size: 9.5px; letter-spacing: .12em; color: var(--dim); text-transform: uppercase; }
+  .stat .v { font-family: var(--mono); font-size: 12.5px; color: var(--text-soft); margin-top: 2px; }
+  #actions { display: flex; gap: 8px; }
+  .btn { font-family: var(--mono); font-size: 11.5px; padding: 7px 13px; border: 1px solid #23272d; border-radius: 6px; background: transparent; color: var(--text-soft); cursor: pointer; }
+  .btn:hover { border-color: #3a4048; background: #15181c; }
+  .btn:disabled { opacity: .4; cursor: default; }
+  #btn-stop { border-color: #2b2023; color: var(--red); }
+  #btn-stop:hover { border-color: #5a3438; background: #1b1416; }
+  #btn-stop.as-start { color: var(--green); border-color: #1e2a22; }
+  #btn-stop.as-start:hover { border-color: #34503a; background: #12201a; }
+
+  /* ---- toolbar ---- */
+  #toolbar { display: flex; align-items: center; gap: 12px; padding: 11px 22px; border-bottom: 1px solid var(--border); background: var(--bg); }
+  #search-box { display: flex; align-items: center; gap: 9px; flex: 1; max-width: 460px; background: #101317; border: 1px solid #1e2228; border-radius: 7px; padding: 7px 11px; }
+  #search-box:focus-within { border-color: #2c323a; }
+  #search-box .slash { font-family: var(--mono); font-size: 12px; color: var(--dim); }
+  #search { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font-family: var(--mono); font-size: 12px; min-width: 0; }
+  #match-label { font-family: var(--mono); font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+  #filters { display: flex; gap: 6px; }
+  .chip { font-family: var(--mono); font-size: 11px; padding: 6px 11px; border-radius: 6px; cursor: pointer; border: 1px solid #1c2026; background: transparent; color: var(--muted); }
+  .chip:hover { border-color: #3a4048; }
+  .chip.active { border-color: #2f353d; background: #171b20; color: var(--text); }
+  #toolbar-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  #follow { font-family: var(--mono); font-size: 11px; cursor: pointer; border: 0; background: transparent; color: var(--muted); }
+  #follow.on { color: var(--green); }
+  #clear { font-family: var(--mono); font-size: 11px; color: var(--muted); cursor: pointer; border: 0; background: transparent; }
+  #clear:hover { color: var(--text-soft); }
+
+  /* ---- logs ---- */
+  #log-pane { flex: 1; min-height: 0; overflow-y: auto; background: var(--bg); padding: 10px 0 26px; }
+  .log-line { display: flex; gap: 14px; padding: 2px 22px; }
+  .log-line.hit { background: #14201a; }
+  .log-time { font-family: var(--mono); font-size: 11px; color: var(--dimmer); width: 78px; flex: none; text-align: right; }
+  .log-tag { font-family: var(--mono); font-size: 9.5px; letter-spacing: .08em; width: 44px; flex: none; padding-top: 2px; color: var(--dim); }
+  .log-line.err .log-tag { color: #e26d6d; }
+  .log-line.sys .log-tag { color: var(--sys); }
+  .log-text { font-family: var(--mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; flex: 1; color: var(--log-text); }
+  .log-line.err .log-text { color: var(--err-text); }
+  .log-line.sys .log-text { color: #a9acf7; }
+  #empty { padding: 60px 22px; text-align: center; font-family: var(--mono); font-size: 12px; color: var(--dimmer); }
+
+  /* ---- footer ---- */
+  #footer { display: flex; align-items: center; gap: 18px; padding: 9px 22px; border-top: 1px solid var(--border); background: var(--panel); font-family: var(--mono); font-size: 10.5px; color: #565c64; }
+  #foot-hint { margin-left: auto; }
+</style>
+</head>
+<body>
+  <aside id="sidebar">
+    <div id="brand">
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <defs>
+          <linearGradient id="xg" x1="21" y1="21" x2="43" y2="43" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#8ceb97"/>
+            <stop offset="1" stop-color="#55c268"/>
+          </linearGradient>
+        </defs>
+        <rect x="1" y="1" width="62" height="62" rx="14" fill="#0c0e11" stroke="#23272d" stroke-width="2"/>
+        <path class="x-under" d="M43 21 36.5 27.5 M27.5 36.5 21 43" stroke="#35543c" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+        <path class="x-over" d="M21 21 43 43" stroke="url(#xg)" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+        <circle class="x-dot" cx="32" cy="32" r="3.2" fill="#dcffe2"/>
+      </svg>
+      <div class="name">xproc</div>
+      <div id="version"></div>
+    </div>
+    <div id="procfile-path"></div>
+    <div id="list-head">
+      <div class="label">Processes</div>
+      <div id="running-label"></div>
+    </div>
+    <div id="proc-list"></div>
+    <div id="side-foot">
+      <div class="pulse"></div>
+      <div class="txt" id="uptime">xproc run</div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <header id="header">
+      <div id="head-id">
+        <div class="row">
+          <div id="proc-title">—</div>
+          <div id="status-pill" hidden></div>
+        </div>
+        <div id="proc-cmd"></div>
+      </div>
+      <div id="head-right">
+        <div class="stat"><div class="k">PID</div><div class="v" id="stat-pid">—</div></div>
+        <div class="stat"><div class="k">CPU</div><div class="v" id="stat-cpu">—</div></div>
+        <div class="stat"><div class="k">MEM</div><div class="v" id="stat-mem">—</div></div>
+        <div id="actions">
+          <button class="btn" id="btn-restart">restart</button>
+          <button class="btn" id="btn-stop">stop</button>
+        </div>
+      </div>
+    </header>
+
+    <div id="toolbar">
+      <div id="search-box">
+        <div class="slash">/</div>
+        <input id="search" type="search" placeholder="Search logs…" autocomplete="off">
+        <div id="match-label"></div>
+      </div>
+      <div id="filters"></div>
+      <div id="toolbar-right">
+        <button id="follow" class="on">● follow</button>
+        <button id="clear">clear</button>
+      </div>
+    </div>
+
+    <div id="log-pane"></div>
+
+    <footer id="footer">
+      <div id="foot-host"></div>
+      <div id="foot-total"></div>
+      <div id="foot-hint">Ctrl-C on xproc run terminates all processes</div>
+    </footer>
+  </main>
+
+<script>
+'use strict'
+
+const LEVELS = ['all', 'out', 'err', 'sys']
+const TAGS = { out: 'OUT', err: 'ERR', sys: 'SYS' }
+const MAX_LINES = 5000
+
+const state = {
+  procs: new Map(), // name -> { name, command, status, pid, code, signal, cpu, memMB, logs }
+  order: [],
+  meta: {},
+  active: null,
+  query: '',
+  level: 'all',
+  follow: true,
+  connected: false,
+}
+
+const $ = id => document.getElementById(id)
+const $list = $('proc-list'), $pane = $('log-pane'), $search = $('search')
+
+const ANSI_RE = /\x1b\[[0-9;?]*[a-zA-Z]|\x1b\][^\x07]*(\x07|\x1b\\)/g
+const stripAnsi = s => s.replace(ANSI_RE, '')
+const escapeHtml = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const fmtTime = t => new Date(t).toTimeString().slice(0, 8)
+
+const isRunning = p => p.status === 'running'
+const matchesLevel = e => state.level === 'all' || e.stream === state.level
+const matchesQuery = e => !state.query || stripAnsi(e.line).toLowerCase().includes(state.query.toLowerCase())
+const visible = e => matchesLevel(e) && matchesQuery(e)
+
+/* ---------- sidebar ---------- */
+
+function renderSidebar() {
+  $list.innerHTML = ''
+  for (const name of state.order) {
+    const p = state.procs.get(name)
+    const up = isRunning(p)
+    const btn = document.createElement('button')
+    btn.className = 'proc-item' + (up ? ' up' : ' down') + (name === state.active ? ' active' : '')
+    btn.title = p.command
+    btn.innerHTML =
+      '<div class="dot"></div>' +
+      '<div class="info"><div class="pname">' + escapeHtml(p.name) + '</div>' +
+      '<div class="pcmd">' + escapeHtml(p.command) + '</div></div>' +
+      '<div class="badge">' + (up ? p.pid : 'exited') + '</div>'
+    btn.onclick = () => selectProc(name)
+    $list.appendChild(btn)
+  }
+  const running = state.order.filter(n => isRunning(state.procs.get(n))).length
+  $('running-label').textContent = running + '/' + state.order.length
+}
+
+function renderUptime() {
+  const t0 = state.meta.startedAt
+  if (!t0) return
+  const s = Math.max(0, Math.floor((Date.now() - t0) / 1000))
+  const label = s >= 3600
+    ? Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm'
+    : Math.floor(s / 60) + 'm ' + (s % 60) + 's'
+  $('uptime').textContent = 'xproc run · uptime ' + label
+}
+setInterval(renderUptime, 1000)
+
+/* ---------- header ---------- */
+
+function renderHeader() {
+  const p = state.procs.get(state.active)
+  const pill = $('status-pill')
+  if (!p) {
+    $('proc-title').textContent = '—'
+    pill.hidden = true
+    $('proc-cmd').textContent = ''
+    return
+  }
+  const up = isRunning(p)
+  $('proc-title').textContent = p.name
+  pill.hidden = false
+  pill.textContent = p.status
+  pill.className = up ? '' : 'down'
+  $('proc-cmd').textContent = '$ ' + p.command
+  $('stat-pid').textContent = up ? p.pid : '—'
+  $('stat-cpu').textContent = up && p.cpu != null ? p.cpu.toFixed(1) + '%' : '—'
+  $('stat-mem').textContent = up && p.memMB != null ? p.memMB + ' MB' : '—'
+  const stop = $('btn-stop')
+  stop.textContent = up ? 'stop' : 'start'
+  stop.className = 'btn' + (up ? '' : ' as-start')
+}
+
+async function control(action) {
+  if (!state.active) return
+  await fetch('/api/procs/' + encodeURIComponent(state.active) + '/' + action, { method: 'POST' }).catch(() => {})
+}
+$('btn-restart').onclick = () => control('restart')
+$('btn-stop').onclick = () => control(isRunning(state.procs.get(state.active) || {}) ? 'stop' : 'start')
+
+/* ---------- toolbar ---------- */
+
+function renderFilters() {
+  const box = $('filters')
+  box.innerHTML = ''
+  for (const level of LEVELS) {
+    const chip = document.createElement('button')
+    chip.className = 'chip' + (state.level === level ? ' active' : '')
+    chip.textContent = level
+    chip.onclick = () => { state.level = level; renderFilters(); renderLogs() }
+    box.appendChild(chip)
+  }
+}
+
+$search.addEventListener('input', () => { state.query = $search.value; renderLogs() })
+
+$('follow').onclick = () => setFollow(!state.follow)
+function setFollow(on) {
+  state.follow = on
+  const btn = $('follow')
+  btn.className = on ? 'on' : ''
+  btn.textContent = (on ? '●' : '○') + ' follow'
+  renderFooter()
+  if (on) $pane.scrollTop = $pane.scrollHeight
+}
+
+$('clear').onclick = () => {
+  const p = state.procs.get(state.active)
+  if (!p) return
+  p.logs = []
+  renderLogs()
+}
+
+$pane.addEventListener('scroll', () => {
+  const atBottom = $pane.scrollHeight - $pane.scrollTop - $pane.clientHeight < 40
+  if (state.follow && !atBottom) setFollow(false)
+  else if (!state.follow && atBottom) setFollow(true)
+})
+
+document.addEventListener('keydown', e => {
+  if (e.key === '/' && document.activeElement !== $search) {
+    e.preventDefault()
+    $search.focus()
+    $search.select()
+  }
+  if (e.key === 'Escape' && document.activeElement === $search) {
+    $search.value = ''
+    state.query = ''
+    renderLogs()
+    $search.blur()
+  }
+})
+
+/* ---------- logs ---------- */
+
+function lineHtml(entry) {
+  const hit = state.query ? ' hit' : ''
+  return '<div class="log-line ' + entry.stream + hit + '">' +
+    '<div class="log-time">' + fmtTime(entry.t) + '</div>' +
+    '<div class="log-tag">' + (TAGS[entry.stream] || '') + '</div>' +
+    '<div class="log-text">' + (escapeHtml(stripAnsi(entry.line)) || '&nbsp;') + '</div></div>'
+}
+
+let shownCount = 0
+
+function renderLogs() {
+  const p = state.procs.get(state.active)
+  if (!p) { $pane.innerHTML = '<div id="empty">Waiting for processes…</div>'; return }
+  const lines = p.logs.filter(visible)
+  shownCount = lines.length
+  $pane.innerHTML = lines.map(lineHtml).join('') ||
+    '<div id="empty">' + (state.query || state.level !== 'all' ? 'No matching log lines' : 'No output yet') + '</div>'
+  if (state.follow) $pane.scrollTop = $pane.scrollHeight
+  renderMatchLabel()
+  renderFooter()
+}
+
+function renderMatchLabel() {
+  $('match-label').textContent = state.query ? shownCount + (shownCount === 1 ? ' match' : ' matches') : ''
+}
+
+function renderFooter() {
+  const p = state.procs.get(state.active)
+  $('foot-host').textContent = location.host
+  $('foot-total').textContent = (p ? p.logs.length : 0) + ' lines · ' + (state.follow ? 'following' : 'paused')
+}
+
+function appendLog(name, entry) {
+  const p = state.procs.get(name)
+  if (!p) return
+  p.logs.push(entry)
+  if (p.logs.length > MAX_LINES) p.logs.splice(0, p.logs.length - MAX_LINES)
+  if (name !== state.active) return
+  if (visible(entry)) {
+    const empty = $pane.querySelector('#empty')
+    if (empty) empty.remove()
+    $pane.insertAdjacentHTML('beforeend', lineHtml(entry))
+    while ($pane.childElementCount > MAX_LINES) $pane.firstElementChild.remove()
+    shownCount++
+    renderMatchLabel()
+    if (state.follow) $pane.scrollTop = $pane.scrollHeight
+  }
+  renderFooter()
+}
+
+function selectProc(name) {
+  state.active = name
+  renderSidebar()
+  renderHeader()
+  renderLogs()
+}
+
+/* ---------- websocket ---------- */
+
+function connect() {
+  const ws = new WebSocket('ws://' + location.host + '/ws')
+  ws.onopen = () => { state.connected = true; $('brand').classList.remove('offline') }
+  ws.onclose = () => {
+    state.connected = false
+    $('brand').classList.add('offline')
+    setTimeout(connect, 1500)
+  }
+  ws.onmessage = ev => {
+    const msg = JSON.parse(ev.data)
+    if (msg.type === 'init') {
+      state.meta = msg.meta || {}
+      $('version').textContent = state.meta.version ? 'v' + state.meta.version : ''
+      $('procfile-path').textContent = state.meta.procfile || ''
+      state.procs.clear()
+      state.order = []
+      for (const p of msg.procs) {
+        state.procs.set(p.name, p)
+        state.order.push(p.name)
+      }
+      if (!state.active || !state.procs.has(state.active)) state.active = state.order[0] ?? null
+      renderSidebar()
+      renderHeader()
+      renderLogs()
+      renderUptime()
+    } else if (msg.type === 'log') {
+      appendLog(msg.proc, msg.entry)
+    } else if (msg.type === 'status') {
+      const p = state.procs.get(msg.proc.name)
+      if (p) Object.assign(p, msg.proc)
+      renderSidebar()
+      if (msg.proc.name === state.active) renderHeader()
+    } else if (msg.type === 'stats') {
+      for (const [name, s] of Object.entries(msg.stats)) {
+        const p = state.procs.get(name)
+        if (p) { p.cpu = s.cpu; p.memMB = s.memMB }
+      }
+      if (state.active && msg.stats[state.active]) renderHeader()
+    }
+  }
+}
+
+renderFilters()
+setFollow(true)
+renderFooter()
+connect()
+</script>
+</body>
+</html>
